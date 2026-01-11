@@ -29,7 +29,7 @@
 
   PN532 nfc(pn532hsu);
 
-  WebServer server(80); 
+  WebServer server(9111); 
 
   const char* AGGREGATOR_PUBKEY_PEM = "-----BEGIN PUBLIC KEY-----\n"
                                       "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE65pSD538b3PQnfD98phf4fpu2HCh\n"
@@ -60,25 +60,6 @@
 
   bool verifySignature(const String& data, const char* signatureHex);
   void handleAccessEvent(StaticJsonDocument<1024>& doc);
-
-  void clearAllStoredKeys() {
-    nvs_handle_t nvs_handle;
-    esp_err_t err = nvs_open("user_keys", NVS_READWRITE, &nvs_handle);
-    if (err != ESP_OK) {
-      Serial.printf("Error opening NVS namespace for erase: %s\n", esp_err_to_name(err));
-      return;
-    }
-
-    err = nvs_erase_all(nvs_handle);  // Erases all keys in this namespace
-    if (err != ESP_OK) {
-      Serial.printf("Error erasing NVS keys: %s\n", esp_err_to_name(err));
-    } else {
-      Serial.println("✅ All stored public keys erased from NVS.");
-    }
-
-    nvs_commit(nvs_handle);  // Apply changes
-    nvs_close(nvs_handle);
-  }
 
   bool retrievePublicKey(const char* userId, char* publicKeyBuffer, size_t bufferSize) {
     nvs_handle_t nvs_handle;
@@ -126,8 +107,6 @@
       }
       ESP_ERROR_CHECK(ret);
 
-     
-      clearAllStoredKeys();
     
 
     connectToWiFi();
@@ -182,12 +161,6 @@
 
     if(id){
 
-      // Prepare APDU command to send — for example, a simple "GET USER ID" command
-
-      // This APDU must match what your Android HostApduService expects.
-
-      // Here’s an example SELECT command for a dummy AID (adjust as needed):
-
 
 
     uint8_t apduCommand[] = {
@@ -214,7 +187,7 @@
 
 
 
-      // Send APDU command to the card emulator (your phone)
+      // Send APDU command to the card emulator
 
       bool success = nfc.inDataExchange(apduCommand, sizeof(apduCommand), response, &responseLength);
 
@@ -226,15 +199,7 @@
 
         Serial.println("✅ APDU response OK");
 
-
-
-        // Null-terminate the response to treat it as a C-style string
-
         response[responseLength - 2] = '\0';
-
-
-
-        // Parse JSON data from the APDU response
 
         StaticJsonDocument<200> doc;
 
@@ -330,19 +295,14 @@
     }
 
     if (strcmp(type, "add_pubkey_event") == 0) {
-    if (error) {
-      // ... handle error ...
-    }
+
     const char* type = doc["type"];
     const char* userId = doc["user_id"];
     const char* publicKey = doc["public_key"];
     const char* aggregatorSignature = doc["aggregator_signature"];
-    if (userId == nullptr || publicKey == nullptr || aggregatorSignature == nullptr) {
-      // ... handle error ...
-    }
 
     // Create a new, canonicalized JSON object for signature verification
-    StaticJsonDocument<512> canonicalDoc; // Smaller buffer is fine
+    StaticJsonDocument<512> canonicalDoc; 
     canonicalDoc["type"] = doc["type"];
     canonicalDoc["block_height"] = doc["block_height"];
     canonicalDoc["user_id"] = doc["user_id"];
@@ -359,7 +319,7 @@
     if (verifySignature(canonicalString, aggregatorSignature, AGGREGATOR_PUBKEY_PEM)) {
       Serial.println("✅ Signature verified successfully!");
       
-      // Step 3: Save to NVS
+      // Save to NVS
         nvs_handle_t nvs_handle;
         esp_err_t err = nvs_open("user_keys", NVS_READWRITE, &nvs_handle);
         if (err != ESP_OK) {
@@ -411,7 +371,7 @@
     unsigned char hash[32];
     mbedtls_sha256_context sha256_ctx;
     mbedtls_sha256_init(&sha256_ctx);
-    mbedtls_sha256_starts(&sha256_ctx, 0); // Use _ret function for error checking
+    mbedtls_sha256_starts(&sha256_ctx, 0);
     mbedtls_sha256_update(&sha256_ctx, (const unsigned char*)data.c_str(), data.length());
     mbedtls_sha256_finish(&sha256_ctx, hash);
     mbedtls_sha256_free(&sha256_ctx);
@@ -457,7 +417,7 @@
         return;
     }
 
-    // Check if the nodeId is "UE1" and use the aggregator's public key
+    // Check if the nodeId is an aggregator and use the aggregator's public key
     if (strcmp(nodeId, "TyuP8hYipi8o") == 0) {
         publicKeyToUse = AGGREGATOR_PUBKEY_PEM;
         Serial.println("Using Aggregator's public key for TyuP8hYipi8o node.");
@@ -559,12 +519,6 @@
   Serial.println(WiFi.localIP());
 
   }
-
-  //blink led when recieved key
-  //reset memory
-  //keep led on for 30 seconds when access granted
-  //check the error and fix Error code: -11 , response from the 8080 
-
 
   void sendDataToWifi(String userId, String roomName) {
 
